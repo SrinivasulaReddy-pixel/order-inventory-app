@@ -1,0 +1,32 @@
+{
+  "family": "order-service",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::<account-id>:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "order-service",
+      "image": "<account-id>.dkr.ecr.<region>.amazonaws.com/order-service:latest",
+      "portMappings": [{ "containerPort": 8082, "protocol": "tcp" }],
+      "environment": [
+        { "name": "SPRING_DATASOURCE_URL", "value": "jdbc:sqlserver://<rds-endpoint>:1433;databaseName=orderdb;encrypt=true;trustServerCertificate=true" },
+        { "name": "SPRING_KAFKA_BOOTSTRAP_SERVERS", "value": "<msk-bootstrap-brokers>" },
+        { "name": "EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE", "value": "http://eureka-server.internal:8761/eureka/" }
+      ],
+      "secrets": [
+        { "name": "SPRING_DATASOURCE_PASSWORD", "valueFrom": "arn:aws:secretsmanager:<region>:<account-id>:secret:order-db-password" },
+        { "name": "JWT_SECRET", "valueFrom": "arn:aws:secretsmanager:<region>:<account-id>:secret:jwt-secret" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/order-service",
+          "awslogs-region": "<region>",
+          "awslogs-stream-prefix": "order-service"
+        }
+      }
+    }
+  ]
+}
