@@ -6,8 +6,8 @@ spring:
     name: auth-service
   datasource:
     url: jdbc:sqlserver://localhost:1433;databaseName=authdb;encrypt=true;trustServerCertificate=true
-    username: sa
-    password: YourStrong!Passw0rd
+    username: orderinv_user
+    password: OrderInv!Passw0rd
     driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
   jpa:
     hibernate:

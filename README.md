@@ -30,24 +30,38 @@ Axios frontend, Docker, Jenkins, deployable to AWS.
 
 ## Running it locally (fastest path while you're learning/debugging)
 
-### 1. Start infrastructure only
+This machine doesn't have Docker, so infra is running natively instead of via
+`docker-compose` (that file is still there and works if you install Docker Desktop
+later):
 
-```bash
-docker-compose up -d
+- **SQL Server**: your existing local SQL Server Express (`localhost\SQLEXPRESS`).
+  A login `orderinv_user` / `OrderInv!Passw0rd` was created with `db_owner` on both
+  `authdb` and `orderdb` (already created). **TCP/IP is disabled on that instance by
+  default** - see "One manual step" below, it's the only thing blocking auth-service
+  and order-service from connecting.
+- **MongoDB**: running as a plain process (`mongod.exe --dbpath "D:\JAVA APPS\mongodb-data" --port 27017`), not a Windows service. If you reboot, you'll need to start it again the same way (or run the MongoDB installer's service setup from an elevated prompt).
+- **Kafka**: Apache Kafka 3.7.0 in KRaft mode (no Zookeeper needed) at `C:\kafka`, listening on `localhost:9092`.
+
+### One manual step (needs Administrator)
+
+TCP/IP is off by default on SQL Server Express, so the JDBC driver can't connect
+(JDBC always needs TCP; `sqlcmd`/Windows auth doesn't, which is why database setup
+above still worked). Open **PowerShell as Administrator** and run:
+
+```powershell
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL15.SQLEXPRESS\MSSQLServer\SuperSocketNetLib\Tcp" -Name "Enabled" -Value 1
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL15.SQLEXPRESS\MSSQLServer\SuperSocketNetLib\Tcp\IPAll" -Name "TcpPort" -Value "1433"
+Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL15.SQLEXPRESS\MSSQLServer\SuperSocketNetLib\Tcp\IPAll" -Name "TcpDynamicPorts" -Value ""
+Restart-Service -Name "MSSQL`$SQLEXPRESS" -Force
 ```
 
-This starts SQL Server, MongoDB, Zookeeper, Kafka. Give SQL Server ~30s to finish initializing before starting auth-service/order-service.
+(Equivalent GUI path: SQL Server Configuration Manager -> SQL Server Network
+Configuration -> Protocols for SQLEXPRESS -> enable TCP/IP -> IPAll -> set TCP Port
+to 1433 -> restart the SQL Server (SQLEXPRESS) service.)
 
-### 2. Create the two SQL Server databases
-
-Connect with any SQL client (Azure Data Studio, SSMS, or `sqlcmd`) to `localhost,1433` (user `sa`, password `YourStrong!Passw0rd`) and run:
-
-```sql
-CREATE DATABASE authdb;
-CREATE DATABASE orderdb;
-```
-
-(MongoDB databases `inventorydb` / `notificationdb` are created automatically on first write.)
+auth-service and order-service are already running in the background and retrying
+their DB connection in a loop - once you restart the SQL service they should connect
+on their own within ~30s. No need to relaunch them.
 
 ### 3. Build everything
 
