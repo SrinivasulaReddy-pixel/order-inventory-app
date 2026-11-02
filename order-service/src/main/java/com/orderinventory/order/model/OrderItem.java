@@ -1,5 +1,6 @@
 package com.orderinventory.order.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
@@ -23,6 +24,7 @@ public class OrderItem {
 
     @ManyToOne
     @JoinColumn(name = "order_id")
+    @JsonIgnore // avoid Order -> items -> order -> items ... infinite recursion on serialization
     private Order order;
 
     public OrderItem() {}
