@@ -45,4 +45,31 @@ public class InventoryService {
             log.info("Decremented stock for productId={} by {} -> remaining={}", productId, qty, remaining);
         }, () -> log.warn("Received stock decrement for unknown productId={}", productId));
     }
+
+    /** Compensating action: called when an order is cancelled, to undo its stock decrement. */
+    public void restock(String productId, int qty) {
+        productRepository.findById(productId).ifPresentOrElse(product -> {
+            int updated = product.getStockQuantity() + qty;
+            product.setStockQuantity(updated);
+            productRepository.save(product);
+            log.info("Restocked productId={} by {} -> now={}", productId, qty, updated);
+        }, () -> log.warn("Received restock for unknown productId={}", productId));
+    }
+
+    public Product update(String productId, ProductRequest request) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new java.util.NoSuchElementException("Product not found: " + productId));
+        product.setName(request.getName());
+        product.setDescription(request.getDescription());
+        product.setPrice(request.getPrice());
+        product.setStockQuantity(request.getStockQuantity());
+        return productRepository.save(product);
+    }
+
+    public void delete(String productId) {
+        if (!productRepository.existsById(productId)) {
+            throw new java.util.NoSuchElementException("Product not found: " + productId);
+        }
+        productRepository.deleteById(productId);
+    }
 }

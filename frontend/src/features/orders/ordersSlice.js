@@ -16,6 +16,11 @@ export const placeOrder = createAsyncThunk('orders/place', async (orderRequest) 
   return response.data;
 });
 
+export const cancelOrder = createAsyncThunk('orders/cancel', async (orderId) => {
+  const response = await axiosClient.put(`/orders/${orderId}/cancel`);
+  return response.data;
+});
+
 const ordersSlice = createSlice({
   name: 'orders',
   initialState: { orders: [], status: 'idle', error: null },
@@ -35,6 +40,10 @@ const ordersSlice = createSlice({
       })
       .addCase(placeOrder.rejected, (state, action) => {
         state.error = action.error.message;
+      })
+      .addCase(cancelOrder.fulfilled, (state, action) => {
+        const idx = state.orders.findIndex((o) => o.id === action.payload.id);
+        if (idx !== -1) state.orders[idx] = action.payload;
       });
   },
 });

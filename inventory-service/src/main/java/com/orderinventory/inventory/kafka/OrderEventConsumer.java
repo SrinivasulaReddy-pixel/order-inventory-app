@@ -24,4 +24,19 @@ public class OrderEventConsumer {
             inventoryService.decrementStock(item.getProductId(), item.getQuantity());
         }
     }
+
+    // Separate deserializer target type for this topic - override the consumer factory's
+    // default JSON type just for this listener, since "order-events" and
+    // "order-cancelled-events" carry different payload shapes.
+    @KafkaListener(
+            topics = "order-cancelled-events",
+            groupId = "inventory-service",
+            properties = "spring.json.value.default.type=com.orderinventory.inventory.kafka.OrderCancelledEvent"
+    )
+    public void onOrderCancelled(OrderCancelledEvent event) {
+        log.info("Received OrderCancelledEvent for orderId={} - restocking", event.getOrderId());
+        for (OrderCancelledEvent.Item item : event.getItems()) {
+            inventoryService.restock(item.getProductId(), item.getQuantity());
+        }
+    }
 }

@@ -42,4 +42,17 @@ public class InventoryController {
     public boolean checkStock(@PathVariable String productId, @RequestParam int qty) {
         return inventoryService.isAvailable(productId, qty);
     }
+
+    @PutMapping("/{productId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Product> update(@PathVariable String productId, @Valid @RequestBody ProductRequest request) {
+        return ResponseEntity.ok(inventoryService.update(productId, request));
+    }
+
+    @DeleteMapping("/{productId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> delete(@PathVariable String productId) {
+        inventoryService.delete(productId);
+        return ResponseEntity.noContent().build();
+    }
 }

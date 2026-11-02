@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchMyOrders, fetchAllOrders, placeOrder } from '../features/orders/ordersSlice';
+import { fetchMyOrders, fetchAllOrders, placeOrder, cancelOrder } from '../features/orders/ordersSlice';
 import { fetchProducts } from '../features/inventory/inventorySlice';
 
 export default function OrdersPage() {
@@ -37,6 +37,14 @@ export default function OrdersPage() {
     }));
   };
 
+  const username = useSelector((state) => state.auth.username);
+
+  const handleCancel = async (orderId) => {
+    if (window.confirm('Cancel this order?')) {
+      await dispatch(cancelOrder(orderId));
+    }
+  };
+
   return (
     <div style={{ maxWidth: 700, margin: '20px auto' }}>
       <h2>{isAdmin ? 'All Orders' : 'My Orders'}</h2>
@@ -58,18 +66,22 @@ export default function OrdersPage() {
 
       <table border="1" cellPadding="6" style={{ width: '100%' }}>
         <thead>
-          <tr><th>Order ID</th><th>Customer</th><th>Status</th><th>Total</th><th>Items</th></tr>
+          <tr><th>Order ID</th><th>Customer</th><th>Status</th><th>Total</th><th>Items</th><th>Actions</th></tr>
         </thead>
         <tbody>
-          {orders.map((o) => (
-            <tr key={o.id}>
-              <td>{o.id}</td>
-              <td>{o.customerUsername}</td>
-              <td>{o.status}</td>
-              <td>{o.totalAmount}</td>
-              <td>{o.items.map((i) => `${i.productName} x${i.quantity}`).join(', ')}</td>
-            </tr>
-          ))}
+          {orders.map((o) => {
+            const canCancel = o.status === 'PLACED' && (isAdmin || o.customerUsername === username);
+            return (
+              <tr key={o.id}>
+                <td>{o.id}</td>
+                <td>{o.customerUsername}</td>
+                <td>{o.status}</td>
+                <td>{o.totalAmount}</td>
+                <td>{o.items.map((i) => `${i.productName} x${i.quantity}`).join(', ')}</td>
+                <td>{canCancel && <button onClick={() => handleCancel(o.id)}>Cancel</button>}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

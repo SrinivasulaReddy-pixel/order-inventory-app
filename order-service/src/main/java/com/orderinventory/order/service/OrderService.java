@@ -3,17 +3,22 @@ package com.orderinventory.order.service;
 import com.orderinventory.order.client.InventoryCheckService;
 import com.orderinventory.order.dto.CreateOrderRequest;
 import com.orderinventory.order.dto.OrderItemRequest;
-import com.orderinventory.order.kafka.OrderEventProducer;
+import com.orderinventory.order.kafka.OrderCancelledDomainEvent;
+import com.orderinventory.order.kafka.OrderCancelledEvent;
+import com.orderinventory.order.kafka.OrderPlacedDomainEvent;
 import com.orderinventory.order.kafka.OrderPlacedEvent;
 import com.orderinventory.order.model.Order;
 import com.orderinventory.order.model.OrderItem;
 import com.orderinventory.order.model.OrderStatus;
 import com.orderinventory.order.repository.OrderRepository;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 
 @Service
@@ -21,13 +26,13 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final InventoryCheckService inventoryCheckService;
-    private final OrderEventProducer orderEventProducer;
+    private final ApplicationEventPublisher eventPublisher;
 
     public OrderService(OrderRepository orderRepository, InventoryCheckService inventoryCheckService,
-                         OrderEventProducer orderEventProducer) {
+                         ApplicationEventPublisher eventPublisher) {
         this.orderRepository = orderRepository;
         this.inventoryCheckService = inventoryCheckService;
-        this.orderEventProducer = orderEventProducer;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -59,11 +64,44 @@ public class OrderService {
 
         // ASYNCHRONOUS step: tell the rest of the system an order was placed.
         // Inventory decrements real stock; Notification sends a confirmation.
-        // Order doesn't wait on either of them.
+        // Order doesn't wait on either of them. Published via ApplicationEventPublisher,
+        // not sent to Kafka directly here - OrderEventRelay only forwards it to Kafka
+        // AFTER this transaction actually commits (see its class comment for why).
         List<OrderPlacedEvent.Item> eventItems = request.getItems().stream()
                 .map(i -> new OrderPlacedEvent.Item(i.getProductId(), i.getQuantity(), i.getPrice()))
                 .collect(Collectors.toList());
-        orderEventProducer.publishOrderPlaced(new OrderPlacedEvent(saved.getId(), username, eventItems));
+        eventPublisher.publishEvent(new OrderPlacedDomainEvent(
+                new OrderPlacedEvent(saved.getId(), username, eventItems)));
+
+        return saved;
+    }
+
+    /**
+     * Cancels a PLACED order. Since stock was already decremented asynchronously when the
+     * order was placed, this is a compensating action (Saga pattern): we publish an
+     * OrderCancelledEvent so inventory-service can restock independently - there's no
+     * distributed transaction tying the two services' writes together.
+     */
+    @Transactional
+    public Order cancelOrder(String username, boolean isAdmin, Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new NoSuchElementException("Order not found: " + orderId));
+
+        if (!isAdmin && !order.getCustomerUsername().equals(username)) {
+            throw new AccessDeniedException("You can only cancel your own orders");
+        }
+        if (order.getStatus() != OrderStatus.PLACED) {
+            throw new IllegalStateException("Only PLACED orders can be cancelled (current status: " + order.getStatus() + ")");
+        }
+
+        order.setStatus(OrderStatus.CANCELLED);
+        Order saved = orderRepository.save(order);
+
+        List<OrderCancelledEvent.Item> eventItems = saved.getItems().stream()
+                .map(i -> new OrderCancelledEvent.Item(i.getProductId(), i.getQuantity()))
+                .collect(Collectors.toList());
+        eventPublisher.publishEvent(new OrderCancelledDomainEvent(
+                new OrderCancelledEvent(saved.getId(), eventItems)));
 
         return saved;
     }

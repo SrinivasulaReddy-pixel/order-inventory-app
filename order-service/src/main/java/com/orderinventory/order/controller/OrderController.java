@@ -39,4 +39,13 @@ public class OrderController {
     public ResponseEntity<List<Order>> allOrders() {
         return ResponseEntity.ok(orderService.getAllOrders());
     }
+
+    @PutMapping("/{id}/cancel")
+    @PreAuthorize("hasAnyRole('CUSTOMER','ADMIN')")
+    public ResponseEntity<Order> cancelOrder(@PathVariable Long id, Authentication auth) {
+        boolean isAdmin = auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        Order order = orderService.cancelOrder(auth.getName(), isAdmin, id);
+        return ResponseEntity.ok(order);
+    }
 }
